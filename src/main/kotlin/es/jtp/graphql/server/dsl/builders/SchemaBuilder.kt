@@ -1,14 +1,17 @@
 package es.jtp.graphql.server.dsl.builders
 
-import es.jtp.graphql.server.dsl.utils.*
-import graphql.language.*
+import es.jtp.graphql.server.dsl.exceptions.*
+import graphql.*
+import graphql.schema.*
 import kotlin.reflect.*
 
 /**
  * Builder for a GraphQL schema section.
  */
 class SchemaBuilder {
-    private val operations = mutableMapOf<String, String>()
+    private var query: KClass<*>? = null
+    private var mutation: KClass<*>? = null
+    private var subscription: KClass<*>? = null
 
     // METHODS ----------------------------------------------------------------
 
@@ -23,7 +26,7 @@ class SchemaBuilder {
      * Sets the root type for queries.
      */
     fun <T : Any> query(type: KClass<T>) {
-        operations["query"] = type.simpleName!!
+        query = type
     }
 
     /**
@@ -35,54 +38,91 @@ class SchemaBuilder {
      * Sets the root type for mutations.
      */
     fun <T : Any> mutation(type: KClass<T>) {
-        operations["mutation"] = type.simpleName!!
+        mutation = type
     }
 
     /**
-     * Sets a custom root type using a type name.
+     * Sets the name of the root type for subscriptions.
      */
-    inline fun <reified T : Any> rootOperation(name: String) = rootOperation(name, T::class)
+    inline fun <reified T : Any> subscription() = subscription(T::class)
 
     /**
-     * Sets a custom root type using a type.
+     * Sets the root type for subscriptions.
      */
-    fun <T : Any> rootOperation(name: String, type: KClass<T>) {
-        operations[name] = type.simpleName!!
+    fun <T : Any> subscription(type: KClass<T>) {
+        mutation = type
     }
 
+    //    /**
+    //     * Sets a custom root type using a type name.
+    //     */
+    //    inline fun <reified T : Any> rootOperation(name: String) = rootOperation(name, T::class)
+    //
+    //    /**
+    //     * Sets a custom root type using a type.
+    //     */
+    //    fun <T : Any> rootOperation(name: String, type: KClass<T>) {
+    //        operations[name] = type.simpleName!!
+    //    }
+
     /**
-     * Builds a [SchemaDefinition].
+     * Builds a [GraphQLSchema].
      */
-    fun build(context: GraphQLBuilderContext): SchemaDefinition {
-        val definition = SchemaDefinition.newSchemaDefinition()
+    fun build(context: GraphQLBuilderContext): GraphQLSchema {
+        val definition = context.schema
 
         // Operations
-        for (nameType in operations) {
-            val queryType = TypeName.newTypeName(nameType.value).build()
-            val queryOperation =
-                    OperationTypeDefinition.newOperationTypeDefinition().name(nameType.key).typeName(queryType).build()
+        if (query != null) {
+            val type = context.types[query!!.simpleName] ?: throw GraphQLBuilderException(
+                    "There is no type defined with name '${query!!.simpleName}'")
 
-            definition.operationTypeDefinition(queryOperation)
+            type as? GraphQLObjectType ?: throw GraphQLBuilderException(
+                    "Query requires that the '${query!!.simpleName}' type is an ObjectType")
+
+            definition.query(type)
         }
 
+        if (mutation != null) {
+            val type = context.types[query!!.simpleName] ?: throw GraphQLBuilderException(
+                    "There is no type defined with name '${query!!.simpleName}'")
+
+            type as? GraphQLObjectType ?: throw GraphQLBuilderException(
+                    "Mutation requires that the '${query!!.simpleName}' type is an ObjectType")
+
+            definition.mutation(type)
+        }
+
+        if (subscription != null) {
+            val type = context.types[query!!.simpleName] ?: throw GraphQLBuilderException(
+                    "There is no type defined with name '${query!!.simpleName}'")
+
+            type as? GraphQLObjectType ?: throw GraphQLBuilderException(
+                    "Subscription requires that the '${query!!.simpleName}' type is an ObjectType")
+
+            definition.subscription(type)
+        }
+
+        // Put defaults.
+        let {
+            definition.additionalType(Scalars.GraphQLBoolean)
+            definition.additionalType(Scalars.GraphQLByte)
+            definition.additionalType(Scalars.GraphQLShort)
+            definition.additionalType(Scalars.GraphQLInt)
+            definition.additionalType(Scalars.GraphQLLong)
+            definition.additionalType(Scalars.GraphQLBigInteger)
+            definition.additionalType(Scalars.GraphQLFloat)
+            definition.additionalType(Scalars.GraphQLBigDecimal)
+            definition.additionalType(Scalars.GraphQLChar)
+            definition.additionalType(Scalars.GraphQLString)
+            definition.additionalType(Scalars.GraphQLID)
+        }
+
+        val codeRegistry = context.codeRegistry.build()
+        definition.codeRegistry(codeRegistry)
         return definition.build()
     }
 
-    /**
-     * Prints the definition as a GraphQL schema.
-     */
-    fun toGraphQLString() = StringBuilder().apply {
-        append("schema {\n")
-
-        for (operation in operations) {
-            append(PrinterUtils.indent("${operation.key}: ${operation.value}"))
-            append("\n")
-        }
-
-        append("}")
-    }.toString()
-
     override fun toString(): String {
-        return "Schema(operations=[${operations.toList().joinToString(", ") { "${it.first}: ${it.second}" }}])"
+        return "SchemaBuilder(query=$query, mutation=$mutation, subscription=$subscription)"
     }
 }

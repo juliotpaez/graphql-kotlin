@@ -2,13 +2,13 @@ package es.jtp.graphql.server.dsl.builders
 
 import es.jtp.graphql.server.dsl.exceptions.*
 import es.jtp.graphql.server.dsl.interfaces.*
-import graphql.schema.idl.*
+import graphql.schema.*
 import kotlin.reflect.*
 
 /**
  * Builder for a GraphQL schema.
  */
-class GraphQLBuilder {
+class GraphQLSchemaBuilder {
     internal var schema: SchemaBuilder? = null
     internal val typeDefinitions = mutableMapOf<String, ITypeBuilder>()
 
@@ -48,14 +48,15 @@ class GraphQLBuilder {
     /**
      * Defines a new object type.
      */
-    inline fun <reified T : Any> type(noinline builderFn: ObjectTypeBuilder<T>.() -> Unit) = type(T::class, builderFn)
+    inline fun <reified T : Any> type(noinline builderFn: (ObjectTypeBuilder<T>.() -> Unit)? = null) =
+            type(T::class, builderFn)
 
     /**
      * Defines a new object type.
      */
-    fun <T : Any> type(typeClass: KClass<T>, builderFn: ObjectTypeBuilder<T>.() -> Unit) {
+    fun <T : Any> type(typeClass: KClass<T>, builderFn: (ObjectTypeBuilder<T>.() -> Unit)? = null) {
         val builder = ObjectTypeBuilder(typeClass)
-        builderFn.invoke(builder)
+        builderFn?.invoke(builder)
 
         if (typeClass.simpleName in typeDefinitions) {
             throw GraphQLBuilderException(
@@ -68,15 +69,15 @@ class GraphQLBuilder {
     /**
      * Defines a new interface type.
      */
-    inline fun <reified T : Any> interfaceType(noinline builderFn: InterfaceTypeBuilder<T>.() -> Unit) =
+    inline fun <reified T : Any> interfaceType(noinline builderFn: (InterfaceTypeBuilder<T>.() -> Unit)? = null) =
             interfaceType(T::class, builderFn)
 
     /**
      * Defines a new interface type.
      */
-    fun <T : Any> interfaceType(typeClass: KClass<T>, builderFn: InterfaceTypeBuilder<T>.() -> Unit) {
+    fun <T : Any> interfaceType(typeClass: KClass<T>, builderFn: (InterfaceTypeBuilder<T>.() -> Unit)? = null) {
         val builder = InterfaceTypeBuilder(typeClass)
-        builderFn.invoke(builder)
+        builderFn?.invoke(builder)
 
         if (typeClass.simpleName in typeDefinitions) {
             throw GraphQLBuilderException(
@@ -89,56 +90,70 @@ class GraphQLBuilder {
     /**
      * Defines a new union type.
      */
-    fun union(name: String, builderFn: UnionTypeBuilder.() -> Unit) {
-        val builder = UnionTypeBuilder(name)
-        builderFn.invoke(builder)
+    inline fun <reified T : Any> union(noinline builderFn: (UnionTypeBuilder<T>.() -> Unit)? = null) =
+            union(T::class, builderFn)
 
-        if (name in typeDefinitions) {
+    /**
+     * Defines a new union type.
+     */
+    fun <T : Any> union(typeClass: KClass<T>, builderFn: (UnionTypeBuilder<T>.() -> Unit)? = null) {
+        val builder = UnionTypeBuilder(typeClass)
+        builderFn?.invoke(builder)
+
+        if (typeClass.simpleName in typeDefinitions) {
             throw GraphQLBuilderException(
-                    "The type '$name' is already defined [previous: ${typeDefinitions[name]}, current: $builder]")
+                    "The type '${typeClass.simpleName}' is already defined [previous: ${typeDefinitions[typeClass.simpleName]}, current: $builder]")
         }
 
-        typeDefinitions[name] = builder
+        typeDefinitions[typeClass.simpleName!!] = builder
+    }
+
+    /**
+     * Defines a new enum type.
+     */
+    inline fun <reified T : Enum<T>> enum(noinline builderFn: (EnumTypeBuilder<T>.() -> Unit)? = null) =
+            enum(T::class, builderFn)
+
+    /**
+     * Defines a new enum type.
+     */
+    fun <T : Enum<T>> enum(typeClass: KClass<T>, builderFn: (EnumTypeBuilder<T>.() -> Unit)? = null) {
+        val builder = EnumTypeBuilder(typeClass)
+        builderFn?.invoke(builder)
+
+        if (typeClass.simpleName in typeDefinitions) {
+            throw GraphQLBuilderException(
+                    "The type '${typeClass.simpleName}' is already defined [previous: ${typeDefinitions[typeClass.simpleName]}, current: $builder]")
+        }
+
+        typeDefinitions[typeClass.simpleName!!] = builder
     }
 
     // TODO add enum
     // TODO add input object
 
     /**
-     * Builds a [TypeDefinitionRegistry].
+     * Builds a [GraphQLSchema].
      */
-    fun build(context: GraphQLBuilderContext): TypeDefinitionRegistry {
-        val definition = TypeDefinitionRegistry()
-
-        // Schema
-        if (schema != null) {
-            val schema = schema!!.build(context)
-            definition.add(schema)
-        }
+    fun build(): GraphQLSchema {
+        val definition = GraphQLSchema.newSchema()
+        val codeRegistry = GraphQLCodeRegistry.newCodeRegistry()
+        val context = GraphQLBuilderContext(definition, codeRegistry)
 
         // Types
         for (typeDefinition in typeDefinitions) {
             val type = typeDefinition.value.build(context)
-            definition.add(type)
+            definition.additionalType(type)
+            context.types[type.name] = type
         }
 
-        return definition
+        // Schema
+        if (schema == null) {
+            throw GraphQLBuilderException("At least the query type of the schema must be defined")
+        }
+
+        return schema!!.build(context)
     }
-
-    /**
-     * Prints the definition as a GraphQL schema.
-     */
-    fun toGraphQLString() = StringBuilder().apply {
-        if (schema != null) {
-            append(schema!!.toGraphQLString())
-            append("\n\n")
-        }
-
-        for (typeDefinition in typeDefinitions.values) {
-            append(typeDefinition.toGraphQLString())
-            append("\n\n")
-        }
-    }.toString()
 
     override fun toString(): String {
         return "GraphQL(schema=$schema, typeDefinitions=[${typeDefinitions.values.joinToString(", ")}])"

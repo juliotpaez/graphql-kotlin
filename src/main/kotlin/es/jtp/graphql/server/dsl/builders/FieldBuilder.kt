@@ -1,14 +1,15 @@
 package es.jtp.graphql.server.dsl.builders
 
 import es.jtp.graphql.server.dsl.utils.*
-import graphql.language.*
+import graphql.schema.*
 import kotlin.reflect.*
 
 /**
  * Builder for a GraphQL field definition.
  */
-class FieldBuilder<T : Any>(val field: KProperty1<T, *>) {
+class FieldBuilder<T : Any, V>(val field: KProperty1<T, V>) {
     var description: String? = null
+    internal var resolver: ((DataFetchingEnvironment) -> V?)? = null
 
     // METHODS ----------------------------------------------------------------
 
@@ -17,39 +18,41 @@ class FieldBuilder<T : Any>(val field: KProperty1<T, *>) {
     // TODO include resolver
 
     /**
-     * Builds a [FieldDefinition].
+     * Resolves the
      */
-    internal fun build(context: GraphQLBuilderContext): FieldDefinition {
-        val definition = FieldDefinition.newFieldDefinition()
+    fun resolver(fn: (env: DataFetchingEnvironment) -> V?) {
+        this.resolver = fn
+    }
+
+    /**
+     * Builds a [GraphQLFieldDefinition].
+     */
+    internal fun build(context: GraphQLBuilderContext): GraphQLFieldDefinition? {
+        val definition = GraphQLFieldDefinition.newFieldDefinition()
 
         // Name
         definition.name(field.name)
 
         // Type
-        val fieldType = Utils.typeFromKType(field.returnType)
-        definition.type(fieldType)
+        val typeClass = field.returnType.classifier as KClass<*>
+        definition.type(GraphQLTypeReference.typeRef(typeClass.simpleName))
 
         // Description
         if (this.description != null) {
-            val description = Utils.descriptionFrom(this.description!!)
             definition.description(description)
+        }
+
+        // Resolver
+        if (resolver != null) {
+            val dataFetcher = DataFetcher<V>(resolver!!)
+            val coordinates = Utils.coordinatesFrom(field)
+            context.codeRegistry.dataFetcher(coordinates, dataFetcher)
         }
 
         return definition.build()
     }
 
-    /**
-     * Prints the definition as a GraphQL schema.
-     */
-    fun toGraphQLString() = StringBuilder().apply {
-        if (description != null) {
-            append("\"\"\"\n$description\n\"\"\"\n")
-        }
-
-        append("${field.name}: ${PrinterUtils.printType(field.returnType)}")
-    }.toString()
-
     override fun toString(): String {
-        return "Field(name=${field.name}, type=${PrinterUtils.printType(field.returnType)}, description=$description)"
+        return "Field(name=${field.name}, type=${(field.returnType.classifier as KClass<*>).simpleName}, description=$description)"
     }
 }

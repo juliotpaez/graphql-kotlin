@@ -1,22 +1,13 @@
 package es.jtp.graphql.server.dsl
 
 import es.jtp.graphql.server.dsl.builders.*
-import graphql.*
-import graphql.schema.idl.*
+import graphql.schema.*
 
 /**
- * Generates a new [GraphQL].
+ * Generates a new [GraphQLSchema].
  */
-fun graphQL(builderFn: GraphQLBuilder.() -> Unit): GraphQL {
-    val builder = GraphQLBuilder()
+fun graphQL(builderFn: GraphQLSchemaBuilder.() -> Unit): GraphQLSchema {
+    val builder = GraphQLSchemaBuilder()
     builderFn(builder)
-
-    val runtimeWiringBuilder = RuntimeWiring.newRuntimeWiring()
-    val context = GraphQLBuilderContext(runtimeWiringBuilder)
-    val typeRegistry = builder.build(context)
-    val runtimeWiring = runtimeWiringBuilder.build()
-    val graphQLSchema = SchemaGenerator().makeExecutableSchema(typeRegistry, runtimeWiring)
-    val graphQLBuilder = GraphQL.newGraphQL(graphQLSchema)
-
-    return graphQLBuilder.build()!!
+    return builder.build()
 }

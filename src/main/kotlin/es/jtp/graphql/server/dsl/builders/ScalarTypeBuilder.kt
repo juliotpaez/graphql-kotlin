@@ -34,21 +34,17 @@ class ScalarTypeBuilder<I : Any>(internal val type: KClass<I>) : ITypeBuilder {
     }
 
     /**
-     * Builds a [ScalarTypeDefinition].
+     * Builds a [GraphQLScalarType].
      */
-    override fun build(context: GraphQLBuilderContext): ScalarTypeDefinition {
-        val definition = ScalarTypeDefinition.newScalarTypeDefinition()
-        val graphQLDefinition = GraphQLScalarType.newScalar()
+    override fun build(context: GraphQLBuilderContext): GraphQLScalarType {
+        val definition = GraphQLScalarType.newScalar()
 
         // Name
         definition.name(type.simpleName)
-        graphQLDefinition.name(type.simpleName)
 
         // Description
         if (this.description != null) {
-            val description = Utils.descriptionFrom(this.description!!)
-            definition.description(description)
-            graphQLDefinition.description(this.description!!)
+            definition.description(this.description!!)
         }
 
         // (De)serializer
@@ -98,24 +94,10 @@ class ScalarTypeBuilder<I : Any>(internal val type: KClass<I>) : ITypeBuilder {
             }
         }
 
-        graphQLDefinition.coercing(coercing)
-
-        // Add graphQL definition.
-        context.runtimeWiringBuilder.scalar(graphQLDefinition.build())
+        definition.coercing(coercing)
 
         return definition.build()
     }
-
-    /**
-     * Prints the definition as a GraphQL schema.
-     */
-    override fun toGraphQLString() = StringBuilder().apply {
-        if (description != null) {
-            append("\"\"\"\n$description\n\"\"\"\n")
-        }
-
-        append("scalar ${type.simpleName}")
-    }.toString()
 
     override fun toString(): String {
         return "Scalar(name=${type.simpleName}, description=$description)"

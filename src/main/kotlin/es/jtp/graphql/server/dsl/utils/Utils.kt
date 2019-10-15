@@ -2,6 +2,7 @@ package es.jtp.graphql.server.dsl.utils
 
 import es.jtp.graphql.server.dsl.exceptions.*
 import graphql.language.*
+import graphql.schema.*
 import kotlin.reflect.*
 
 internal object Utils {
@@ -12,6 +13,12 @@ internal object Utils {
         val sl = SourceLocation(0, text.length)
         return Description(text, sl, text.lines().size > 2)
     }
+
+    /**
+     * Creates a [FieldCoordinates] from [KProperty1] using reflection.
+     */
+    internal fun coordinatesFrom(property: KProperty1<*, *>) =
+            FieldCoordinates.coordinates(property.declaringClass().simpleName, property.name)!!
 
     /**
      * Creates a [Type] from a [KType] using reflection.
