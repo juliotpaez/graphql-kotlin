@@ -7,7 +7,7 @@ import graphql.schema.*
 /**
  * Interface for type builders.
  */
-interface ITypeBuilder {
+interface IGraphQLBuilder {
     /**
      * Builds a [TypeDefinition].
      */

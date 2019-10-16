@@ -1,12 +1,13 @@
 package es.jtp.graphql.server.dsl.builders
 
+import es.jtp.graphql.server.dsl.interfaces.*
 import graphql.schema.*
 
 /**
  * Builder for a GraphQL field definition.
  */
-class EnumValueBuilder<T : Enum<T>>(val enumValue: T) {
-    var description: String? = null
+class EnumValueBuilder<T : Enum<T>>(val enumValue: T) : IGraphQLWithDescription {
+    override var description: String? = null
 
     // METHODS ----------------------------------------------------------------
 

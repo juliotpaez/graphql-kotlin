@@ -11,8 +11,8 @@ import kotlin.reflect.full.*
  * Builder for a GraphQL interface type.
  */
 @Suppress("UNCHECKED_CAST")
-class InterfaceTypeBuilder<T : Any>(val type: KClass<T>) : ITypeBuilder {
-    var description: String? = null
+class InterfaceTypeBuilder<T : Any>(val type: KClass<T>) : IGraphQLBuilder, IGraphQLWithDescription {
+    override var description: String? = null
     internal val definitionBuilders = mutableMapOf<KProperty1<T, *>, FieldBuilder<T, *>>()
 
     init {
@@ -25,7 +25,6 @@ class InterfaceTypeBuilder<T : Any>(val type: KClass<T>) : ITypeBuilder {
     // METHODS ----------------------------------------------------------------
 
     // TODO include directives
-    // TODO include resolver
 
     /**
      * Modifies a field of a type.

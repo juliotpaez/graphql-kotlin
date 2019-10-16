@@ -1,42 +1,13 @@
 package es.jtp.graphql.server.dsl
 
 import es.jtp.graphql.*
+import es.jtp.graphql.server.dsl.enums.*
 import es.jtp.graphql.server.dsl.utils.*
-import graphql.*
-import graphql.schema.*
 import graphql.schema.idl.*
 import org.junit.jupiter.api.*
 import java.util.*
 
 internal class GraphQLSchemaBuilderTest {
-    @Test
-    fun x() {
-        val sdl = """
-            schema @directive(a : 4 b: 3) {
-                query: x
-            }
-            
-            "xxx"
-type x {
-    alfa: Int @deprecated 
-}
-
-
-extend type x @newDirective
-
-scalar u
-
-directive @newDirective on OBJECT
-        """.trimIndent()
-
-        val graphQLSchema = buildSchema(sdl)
-        val graphQLBuilder = GraphQL.newGraphQL(graphQLSchema)
-        val graphQL = graphQLBuilder.build()
-
-
-        print(graphQLSchema)
-    }
-
     @Test
     fun y() {
         val schema = graphQL {
@@ -57,12 +28,22 @@ directive @newDirective on OBJECT
 
             type<TestType> {
                 field(TestType::scalar) {
+                    arguments<TestType.ScalarArguments> {
+                        argument(TestType.ScalarArguments::x) {
+                            defaultValue("--")
+                        }
+                    }
+
                     resolver { env ->
                         Date()
                     }
                 }
             }
-            type<TestUnion1> {}
+            type<TestUnion1> {
+                directive<TestDirective2> {
+                    argument(TestDirective2::x, "x")
+                }
+            }
             type<TestUnion2> {}
             type<TestInterface1> {}
             type<TestInterface2> {
@@ -83,6 +64,24 @@ directive @newDirective on OBJECT
                     description = "JEJEJ"
                 }
             }
+
+            directive<TestDirective> {
+                on(DirectiveLocation.Enum)
+            }
+
+            directive<TestDirective2> {
+                onAnyLocation()
+                argument(TestDirective2::x) {
+                    defaultValue("def")
+                }
+            }
+
+            inputType<TestInputType> {
+                description = "TestInputType"
+                field(TestInputType::a) {
+                    defaultValue("A default")
+                }
+            }
         }
 
         val input = """
@@ -96,20 +95,8 @@ directive @newDirective on OBJECT
         val res = exeSchema.execute(input)
 
         print(schema)
-    }
 
 
-    private fun buildSchema(sdl: String): GraphQLSchema {
-        val typeRegistry = SchemaParser().parse(sdl)
-        val schemaGenerator = SchemaGenerator()
-        val runtimeWiring = RuntimeWiring.newRuntimeWiring()
-        runtimeWiring.directive("xx", object : SchemaDirectiveWiring {
-            override fun onObject(
-                    environment: SchemaDirectiveWiringEnvironment<GraphQLObjectType>?): GraphQLObjectType {
-                return super.onObject(environment)
-            }
-        })
-
-        return schemaGenerator.makeExecutableSchema(typeRegistry, runtimeWiring.build())
+        val graphQLSchema = SchemaParser().parse(textualSchema)
     }
 }

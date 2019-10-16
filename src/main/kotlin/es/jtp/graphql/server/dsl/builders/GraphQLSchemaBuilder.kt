@@ -10,7 +10,8 @@ import kotlin.reflect.*
  */
 class GraphQLSchemaBuilder {
     internal var schema: SchemaBuilder? = null
-    internal val typeDefinitions = mutableMapOf<String, ITypeBuilder>()
+    internal val typeDefinitions = mutableMapOf<String, IGraphQLBuilder>()
+    internal val directiveDefinitions = mutableMapOf<String, DirectiveTypeBuilder<*>>()
 
     // METHODS ----------------------------------------------------------------
 
@@ -36,13 +37,7 @@ class GraphQLSchemaBuilder {
     fun <I : Any> scalar(typeClass: KClass<I>, builderFn: ScalarTypeBuilder<I>.() -> Unit) {
         val builder = ScalarTypeBuilder<I>(typeClass)
         builderFn.invoke(builder)
-
-        if (typeClass.simpleName in typeDefinitions) {
-            throw GraphQLBuilderException(
-                    "The type '${typeClass.simpleName}' is already defined [previous: ${typeDefinitions[typeClass.simpleName]}, current: $builder]")
-        }
-
-        typeDefinitions[typeClass.simpleName!!] = builder
+        addType(typeClass, builder)
     }
 
     /**
@@ -57,13 +52,7 @@ class GraphQLSchemaBuilder {
     fun <T : Any> type(typeClass: KClass<T>, builderFn: (ObjectTypeBuilder<T>.() -> Unit)? = null) {
         val builder = ObjectTypeBuilder(typeClass)
         builderFn?.invoke(builder)
-
-        if (typeClass.simpleName in typeDefinitions) {
-            throw GraphQLBuilderException(
-                    "The type '${typeClass.simpleName}' is already defined [previous: ${typeDefinitions[typeClass.simpleName]}, current: $builder]")
-        }
-
-        typeDefinitions[typeClass.simpleName!!] = builder
+        addType(typeClass, builder)
     }
 
     /**
@@ -78,13 +67,7 @@ class GraphQLSchemaBuilder {
     fun <T : Any> interfaceType(typeClass: KClass<T>, builderFn: (InterfaceTypeBuilder<T>.() -> Unit)? = null) {
         val builder = InterfaceTypeBuilder(typeClass)
         builderFn?.invoke(builder)
-
-        if (typeClass.simpleName in typeDefinitions) {
-            throw GraphQLBuilderException(
-                    "The type '${typeClass.simpleName}' is already defined [previous: ${typeDefinitions[typeClass.simpleName]}, current: $builder]")
-        }
-
-        typeDefinitions[typeClass.simpleName!!] = builder
+        addType(typeClass, builder)
     }
 
     /**
@@ -99,13 +82,7 @@ class GraphQLSchemaBuilder {
     fun <T : Any> union(typeClass: KClass<T>, builderFn: (UnionTypeBuilder<T>.() -> Unit)? = null) {
         val builder = UnionTypeBuilder(typeClass)
         builderFn?.invoke(builder)
-
-        if (typeClass.simpleName in typeDefinitions) {
-            throw GraphQLBuilderException(
-                    "The type '${typeClass.simpleName}' is already defined [previous: ${typeDefinitions[typeClass.simpleName]}, current: $builder]")
-        }
-
-        typeDefinitions[typeClass.simpleName!!] = builder
+        addType(typeClass, builder)
     }
 
     /**
@@ -120,7 +97,49 @@ class GraphQLSchemaBuilder {
     fun <T : Enum<T>> enum(typeClass: KClass<T>, builderFn: (EnumTypeBuilder<T>.() -> Unit)? = null) {
         val builder = EnumTypeBuilder(typeClass)
         builderFn?.invoke(builder)
+        addType(typeClass, builder)
+    }
 
+    /**
+     * Defines a new input type.
+     */
+    inline fun <reified T : Any> inputType(noinline builderFn: (InputTypeBuilder<T>.() -> Unit)? = null) =
+            inputType(T::class, builderFn)
+
+    /**
+     * Defines a new input type.
+     */
+    fun <T : Any> inputType(typeClass: KClass<T>, builderFn: (InputTypeBuilder<T>.() -> Unit)? = null) {
+        val builder = InputTypeBuilder(typeClass)
+        builderFn?.invoke(builder)
+        addType(typeClass, builder)
+    }
+
+    /**
+     * Defines a new directive.
+     */
+    inline fun <reified T : Any> directive(noinline builderFn: DirectiveTypeBuilder<T>.() -> Unit) =
+            directive(typeClass = T::class, builderFn = builderFn)
+
+    /**
+     * Defines a new directive.
+     */
+    fun <T : Any> directive(typeClass: KClass<T>, builderFn: DirectiveTypeBuilder<T>.() -> Unit) {
+        val builder = DirectiveTypeBuilder(typeClass)
+        builderFn.invoke(builder)
+
+        if (typeClass.simpleName in directiveDefinitions) {
+            throw GraphQLBuilderException(
+                    "The directive '${typeClass.simpleName}' is already defined [previous: ${typeDefinitions[typeClass.simpleName]}, current: $builder]")
+        }
+
+        directiveDefinitions[typeClass.simpleName!!] = builder
+    }
+
+    /**
+     * Adds a type to the typeDefinitions.
+     */
+    private fun addType(typeClass: KClass<*>, builder: IGraphQLBuilder) {
         if (typeClass.simpleName in typeDefinitions) {
             throw GraphQLBuilderException(
                     "The type '${typeClass.simpleName}' is already defined [previous: ${typeDefinitions[typeClass.simpleName]}, current: $builder]")
@@ -128,9 +147,6 @@ class GraphQLSchemaBuilder {
 
         typeDefinitions[typeClass.simpleName!!] = builder
     }
-
-    // TODO add enum
-    // TODO add input object
 
     /**
      * Builds a [GraphQLSchema].
@@ -145,6 +161,12 @@ class GraphQLSchemaBuilder {
             val type = typeDefinition.value.build(context)
             definition.additionalType(type)
             context.types[type.name] = type
+        }
+
+        // Directives
+        for (directiveDefinition in directiveDefinitions) {
+            val directive = directiveDefinition.value.build(context)
+            definition.additionalDirective(directive)
         }
 
         // Schema

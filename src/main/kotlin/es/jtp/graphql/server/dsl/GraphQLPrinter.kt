@@ -9,10 +9,12 @@ private val buildInTypes = listOf(Scalars.GraphQLByte, Scalars.GraphQLShort, Sca
         Scalars.GraphQLBigInteger, Scalars.GraphQLFloat, Scalars.GraphQLBigDecimal, Scalars.GraphQLChar,
         Scalars.GraphQLString, Scalars.GraphQLBoolean, Scalars.GraphQLID)
 
+private val buildInDirectives = listOf(Directives.SkipDirective, Directives.IncludeDirective, Directives.DeferDirective)
+
 /**
  * Prints a [GraphQLSchema].
  */
-fun GraphQLSchema.toGraphQLString(includeInternals: Boolean = false) = StringBuilder().apply {
+fun GraphQLSchema.toGraphQLString() = StringBuilder().apply {
     // Print schema
     let {
         append("schema {\n")
@@ -35,14 +37,17 @@ fun GraphQLSchema.toGraphQLString(includeInternals: Boolean = false) = StringBui
         append("}\n\n")
     }
 
-    // TODO
-    //        for (directive in schema.directives) {
-    //            append(directive.toGraphQLString())
-    //            append("\n\n")
-    //        }
+    for (directive in directives) {
+        if (directive in buildInDirectives) {
+            continue
+        }
+
+        append(directive.toGraphQLString())
+        append("\n\n")
+    }
 
     for (type in allTypesAsList) {
-        if (!includeInternals && (type.name.startsWith("__") || type in buildInTypes)) {
+        if (type.name.startsWith("__") || type in buildInTypes) {
             continue
         }
 
@@ -60,10 +65,14 @@ fun GraphQLType.toGraphQLString() = when (this) {
     is GraphQLEnumValueDefinition -> this.toGraphQLString()
     is GraphQLEnumType -> this.toGraphQLString()
     is GraphQLFieldDefinition -> this.toGraphQLString()
+    is GraphQLInputObjectField -> this.toGraphQLString()
     is GraphQLObjectType -> this.toGraphQLString()
+    is GraphQLInputObjectType -> this.toGraphQLString()
     is GraphQLInterfaceType -> this.toGraphQLString()
     is GraphQLUnionType -> this.toGraphQLString()
     is GraphQLScalarType -> this.toGraphQLString()
+    is GraphQLDirective -> this.toGraphQLString()
+    is GraphQLArgument -> this.toGraphQLString()
     else -> throw GraphQLPrinterException("Unsupported type '${this::class}' in printer")
 }
 
@@ -98,7 +107,29 @@ fun GraphQLEnumType.toGraphQLString() = StringBuilder().apply {
 fun GraphQLFieldDefinition.toGraphQLString() = StringBuilder().apply {
     append(printDescription(description))
 
+    append(name)
+
+    if (arguments.isNotEmpty()) {
+        append("(")
+        append(arguments.joinToString(", ") { it.toGraphQLString() })
+        append(")")
+    }
+
+    append(": ${type.name}")
+}.toString()
+
+/**
+ * Prints a [GraphQLInputObjectField].
+ */
+fun GraphQLInputObjectField.toGraphQLString() = StringBuilder().apply {
+    append(printDescription(description))
+
     append("$name: ${type.name}")
+
+    if (defaultValue != null) {
+        append(" = ")
+        append(printValue(defaultValue))
+    }
 }.toString()
 
 /**
@@ -107,15 +138,32 @@ fun GraphQLFieldDefinition.toGraphQLString() = StringBuilder().apply {
 fun GraphQLObjectType.toGraphQLString() = StringBuilder().apply {
     append(printDescription(description))
 
-    append("type $name")
+    append("type $name ")
 
     if (interfaces.isNotEmpty()) {
-        append(" implements ")
+        append("implements ")
 
         append(interfaces.joinToString(" & ") { it.name })
+        append(" ")
     }
 
-    append(" ")
+    if (directives.isNotEmpty()) {
+        append(directives.joinToString(" ") { it.toGraphQLValueString() })
+        append(" ")
+    }
+
+    append(printBlock(fieldDefinitions) {
+        it.toGraphQLString()
+    })
+}.toString()
+
+/**
+ * Prints a [GraphQLInputObjectType].
+ */
+fun GraphQLInputObjectType.toGraphQLString() = StringBuilder().apply {
+    append(printDescription(description))
+
+    append("input $name ")
 
     append(printBlock(fieldDefinitions) {
         it.toGraphQLString()
@@ -141,7 +189,7 @@ fun GraphQLInterfaceType.toGraphQLString() = StringBuilder().apply {
 fun GraphQLUnionType.toGraphQLString() = StringBuilder().apply {
     append(printDescription(description))
 
-    append("union $name ")
+    append("union $name = ")
 
     append(types.joinToString(" | ") { it.name })
 }.toString()
@@ -153,6 +201,59 @@ fun GraphQLScalarType.toGraphQLString() = StringBuilder().apply {
     append(printDescription(description))
 
     append("scalar $name")
+}.toString()
+
+/**
+ * Prints a [GraphQLDirective].
+ */
+fun GraphQLDirective.toGraphQLString() = StringBuilder().apply {
+    append(printDescription(description))
+
+    append("directive @$name")
+
+    if (arguments.isNotEmpty()) {
+        append("(")
+        append(arguments.joinToString(", ") { it.toGraphQLString() })
+        append(")")
+    }
+
+    append(" on ")
+    append(validLocations().joinToString(" | ") { it.name })
+}.toString()
+
+
+/**
+ * Prints a [GraphQLDirective] as value.
+ */
+fun GraphQLDirective.toGraphQLValueString() = StringBuilder().apply {
+    append("@$name")
+
+    if (arguments.isNotEmpty()) {
+        append("(")
+        append(arguments.joinToString(", ") { it.toGraphQLValueString() })
+        append(")")
+    }
+}.toString()
+
+/**
+ * Prints a [GraphQLArgument].
+ */
+fun GraphQLArgument.toGraphQLString() = StringBuilder().apply {
+    append(printDescription(description))
+
+    append("$name: ${type.name}")
+
+    if (defaultValue != null) {
+        append(" = ")
+        append(printValue(defaultValue))
+    }
+}.toString()
+
+/**
+ * Prints a [GraphQLArgument] as value.
+ */
+fun GraphQLArgument.toGraphQLValueString() = StringBuilder().apply {
+    append("$name: ${printValue(value)}")
 }.toString()
 
 // AUXILIARY METHODS ------------------------------------------------------
@@ -182,5 +283,18 @@ private fun <T> printBlock(sequence: Iterable<T>, fn: (T) -> String) = StringBui
     }
 
     append("}")
+}.toString()
+
+
+/**
+ * Prints a value.
+ */
+private fun printValue(value: Any) = StringBuilder().apply {
+    if (value is String) {
+        val safeValue = value.replace("\\", "\\\\").replace("\n", "\\n").replace("\"", "\\\"")
+        append("\"$safeValue\"")
+    } else {
+        append(value)
+    }
 }.toString()
 

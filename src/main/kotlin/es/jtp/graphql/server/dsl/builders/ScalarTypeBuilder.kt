@@ -10,8 +10,8 @@ import kotlin.reflect.*
 /**
  * Builder for a GraphQL scalar type.
  */
-class ScalarTypeBuilder<I : Any>(internal val type: KClass<I>) : ITypeBuilder {
-    var description: String? = null
+class ScalarTypeBuilder<I : Any>(internal val type: KClass<I>) : IGraphQLBuilder, IGraphQLWithDescription {
+    override var description: String? = null
     private var serializer: ((I) -> Any?)? = null
     private var deserializer: ((Any?) -> I)? = null
 

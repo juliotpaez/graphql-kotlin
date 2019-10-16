@@ -10,10 +10,11 @@ import kotlin.reflect.full.*
 /**
  * Builder for a GraphQL object type.
  */
-class ObjectTypeBuilder<T : Any>(val type: KClass<T>) : ITypeBuilder {
-    var description: String? = null
-    internal val definitionBuilders = mutableMapOf<KProperty1<T, *>, FieldBuilder<T, *>>()
-    internal val implements = mutableSetOf<KClass<*>>()
+class ObjectTypeBuilder<T : Any>(val type: KClass<T>) : IGraphQLBuilder, IGraphQLWithDescription {
+    override var description: String? = null
+    private val definitionBuilders = mutableMapOf<KProperty1<T, *>, FieldBuilder<T, *>>()
+    private val implements = mutableSetOf<KClass<*>>()
+    private val directives = mutableMapOf<KClass<*>, DirectiveImplBuilder<*>>()
 
     init {
         for (field in type.memberProperties) {
@@ -24,7 +25,21 @@ class ObjectTypeBuilder<T : Any>(val type: KClass<T>) : ITypeBuilder {
 
     // METHODS ----------------------------------------------------------------
 
-    // TODO include directives
+    /**
+     * Adds a new directive implementation.
+     */
+    inline fun <reified R : Any> directive(noinline builderFn: (DirectiveImplBuilder<R>.() -> Unit)? = null) =
+            directive(typeClass = R::class, builderFn = builderFn)
+
+    /**
+     * Adds a new directive implementation.
+     */
+    fun <R : Any> directive(typeClass: KClass<R>, builderFn: (DirectiveImplBuilder<R>.() -> Unit)? = null) {
+        val builder = DirectiveImplBuilder(typeClass)
+        builderFn?.invoke(builder)
+
+        directives[typeClass] = builder
+    }
 
     /**
      * Sets a Implementation of two types.
@@ -89,8 +104,8 @@ class ObjectTypeBuilder<T : Any>(val type: KClass<T>) : ITypeBuilder {
         }
 
         // Fields
-        for (definitionBuilder in definitionBuilders) {
-            val fieldDefinition = definitionBuilder.value.build(context)
+        for (definitionBuilder in definitionBuilders.values) {
+            val fieldDefinition = definitionBuilder.build(context)
             definition.field(fieldDefinition)
         }
 
@@ -99,11 +114,18 @@ class ObjectTypeBuilder<T : Any>(val type: KClass<T>) : ITypeBuilder {
             definition.withInterface(GraphQLTypeReference.typeRef(implement.simpleName))
         }
 
+        // Directives
+        for ((_, value) in directives) {
+            val directive = value.build(context)
+            definition.withDirective(directive)
+        }
+
         return definition.build()
     }
 
     override fun toString(): String {
         return "Object(name=${type.simpleName}, description=$description, fields=[${definitionBuilders.values.joinToString(
-                ", ")}]})"
+                ", ")}], implements=[${implements.joinToString(", ")}], implements=[${directives.values.joinToString(
+                ", ")}])"
     }
 }

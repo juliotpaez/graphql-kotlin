@@ -6,7 +6,10 @@ interface TestUnion
 
 interface TestInterface
 
-data class TestType(val scalar: Date, val union: TestUnion, val iface: TestInterface)
+data class TestType(val scalar: Date, val union: TestUnion, val iface: TestInterface) {
+    inner class ScalarArguments(val x: String)
+    data class UnionArguments(val u: Int)
+}
 
 data class TestUnion1(val x1: Int) : TestUnion
 data class TestUnion2(val x2: String) : TestUnion
@@ -19,3 +22,8 @@ enum class TestEnum {
     B,
     C
 }
+
+class TestDirective()
+class TestDirective2(val x: String)
+
+data class TestInputType(val a: String)

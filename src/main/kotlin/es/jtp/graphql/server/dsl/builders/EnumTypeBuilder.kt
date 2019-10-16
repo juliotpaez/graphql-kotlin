@@ -10,8 +10,8 @@ import kotlin.reflect.*
  * Builder for a GraphQL object type.
  */
 @Suppress("UNCHECKED_CAST")
-class EnumTypeBuilder<T : Enum<T>>(val type: KClass<T>) : ITypeBuilder {
-    var description: String? = null
+class EnumTypeBuilder<T : Enum<T>>(val type: KClass<T>) : IGraphQLBuilder, IGraphQLWithDescription {
+    override var description: String? = null
     internal val valueBuilders = mutableMapOf<String, EnumValueBuilder<T>>()
 
     init {

@@ -10,8 +10,8 @@ import kotlin.reflect.full.*
  * Builder for a GraphQL union type.
  */
 @Suppress("UNCHECKED_CAST")
-class UnionTypeBuilder<T : Any>(val type: KClass<T>) : ITypeBuilder {
-    var description: String? = null
+class UnionTypeBuilder<T : Any>(val type: KClass<T>) : IGraphQLBuilder, IGraphQLWithDescription {
+    override var description: String? = null
     internal val types = mutableSetOf<KClass<*>>()
 
     // METHODS ----------------------------------------------------------------

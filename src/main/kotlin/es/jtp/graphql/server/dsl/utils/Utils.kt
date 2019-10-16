@@ -7,72 +7,15 @@ import kotlin.reflect.*
 
 internal object Utils {
     /**
-     * Creates a new [Description] from a text.
-     */
-    internal fun descriptionFrom(text: String): Description {
-        val sl = SourceLocation(0, text.length)
-        return Description(text, sl, text.lines().size > 2)
-    }
-
-    /**
      * Creates a [FieldCoordinates] from [KProperty1] using reflection.
      */
     internal fun coordinatesFrom(property: KProperty1<*, *>) =
             FieldCoordinates.coordinates(property.declaringClass().simpleName, property.name)!!
 
     /**
-     * Creates a [Type] from a [KType] using reflection.
+     * Transforms a name into a directive name, i.e like @directive.
      */
-    internal fun typeFromKType(kType: KType): Type<*> {
-        if (kType.isMarkedNullable) {
-            val classifier = kType.classifier as KClass<*>
-            if (classifier.java === List::class.java) {
-                // List type
-                val listType = ListType.newListType()
-                val internalType = typeFromKType(kType.arguments[0].type!!)
-                listType.type(internalType)
-
-                return listType.build()!!
-            } else {
-                // Type name
-                val type = TypeName.newTypeName()
-                type.name(classifier.simpleName)
-
-                return type.build()!!
-            }
-        } else {
-            val nonNull = NonNullType.newNonNullType()
-
-            val classifier = kType.classifier as KClass<*>
-            if (classifier.java === List::class.java) {
-                // List type
-                val listType = ListType.newListType()
-                val internalType = typeFromKType(kType.arguments[0].type!!)
-                listType.type(internalType)
-
-                nonNull.type(listType.build()!!)
-                return nonNull.build()!!
-            } else {
-                // Type name
-                val type = TypeName.newTypeName()
-                type.name(classifier.simpleName)
-
-                nonNull.type(type.build()!!)
-                return nonNull.build()!!
-            }
-        }
-    }
-
-    /**
-     * Creates a [Type] from a [String] using reflection.
-     */
-    internal fun typeFromString(typeName: String): Type<*> {
-        // Type name
-        val type = TypeName.newTypeName()
-        type.name(typeName)
-
-        return type.build()!!
-    }
+    internal fun directiveNameFrom(name: String) = "${name[0].toLowerCase()}${name.substring(1)}"
 
     /**
      * Maps a [Value] to an object.
